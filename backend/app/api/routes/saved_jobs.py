@@ -29,3 +29,20 @@ def save_job(
             .filter(SavedJob.id == existing.id)
             .first()
         )
+    saved = SavedJob(candidate_id=profile.id, job_id=job_id)
+    db.add(saved)
+    db.flush()
+    audit_service.log(
+        db,
+        user_id=current_user.id,
+        action="job.save",
+        entity_type="saved_job",
+        entity_id=str(saved.id),
+    )
+    db.commit()
+    return (
+        db.query(SavedJob)
+        .options(joinedload(SavedJob.job).joinedload(JobPost.company))
+        .filter(SavedJob.id == saved.id)
+        .first()
+    )
