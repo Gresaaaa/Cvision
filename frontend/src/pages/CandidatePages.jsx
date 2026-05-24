@@ -213,3 +213,87 @@ export function CandidateProfilePage() {
     </div>
   );
 }
+
+export function CandidateResumePage() {
+  const [resumes, setResumes] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [message, setMessage] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+
+  const loadResumes = async () => {
+    const { data } = await api.get("/resumes/my");
+    setResumes(data);
+  };
+
+  useEffect(() => {
+    loadResumes();
+  }, []);
+
+  const uploadResume = async (event) => {
+    event.preventDefault();
+    if (!selectedFile) return;
+    const payload = new FormData();
+    payload.set("file", selectedFile);
+    setIsUploading(true);
+    try {
+      await api.post("/resumes/upload", payload, { headers: { "Content-Type": "multipart/form-data" } });
+      setMessage("Resume uploaded. Background analysis is running.");
+      setSelectedFile(null);
+      await loadResumes();
+    } catch (error) {
+      setMessage(getErrorMessage(error, "Unable to upload resume."));
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <div className="page-grid">
+      <PageHero
+        eyebrow="Resume management"
+        title="Upload versions, keep history, and trigger AI analysis."
+        description="Every upload is versioned and analyzed in the background."
+      />
+      <Panel title="Upload CV">
+        <form className="inline-form" onSubmit={uploadResume}>
+          <input accept=".pdf,.doc,.docx,.txt" onChange={(event) => setSelectedFile(event.target.files?.[0] || null)} type="file" />
+          <button className="primary-button" disabled={!selectedFile || isUploading} type="submit">
+            {isUploading ? "Uploading..." : "Upload"}
+          </button>
+        </form>
+        {message ? <p className="info-text">{message}</p> : null}
+      </Panel>
+      <Panel title="Resume versions">
+        {resumes.length ? (
+          <div className="stack-list">
+            {resumes.map((resume) => (
+              <article className="stack-item" key={resume.id}>
+                <div>
+                  <strong>{resume.original_filename}</strong>
+                  <p>Version {resume.version}</p>
+                </div>
+                <div className="action-row">
+                  <Link className="inline-link" to={`/candidate/analysis?resumeId=${resume.id}`}>
+                    View analysis
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="No resume uploaded yet" body="Upload your first CV to unlock analysis and matching." />
+        )}
+      </Panel>
+    </div>
+  );
+}
+
+export function CandidateAnalysisPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [resumes, setResumes] = useState([]);
+  const [selectedResumeId, setSelectedResumeId] = useState("");
+  const [analysis, setAnalysis] = useState(null);
+  const [message, setMessage] = useState("");
+  const [isLoadingSavedAnalysis, setIsLoadingSavedAnalysis] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const requestedResumeId = searchParams.get("resumeId") || "";
