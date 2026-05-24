@@ -297,3 +297,130 @@ export function CandidateAnalysisPage() {
   const [isLoadingSavedAnalysis, setIsLoadingSavedAnalysis] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const requestedResumeId = searchParams.get("resumeId") || "";
+
+  useEffect(() => {
+    api.get("/resumes/my").then(({ data }) => {
+      setResumes(data);
+      const preferredResumeId =
+        requestedResumeId && data.some((resume) => String(resume.id) === requestedResumeId)
+          ? requestedResumeId
+          : data[0]
+            ? String(data[0].id)
+            : "";
+      setSelectedResumeId(preferredResumeId);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!resumes.length || !requestedResumeId) return;
+    const hasRequestedResume = resumes.some((resume) => String(resume.id) === requestedResumeId);
+    if (hasRequestedResume && requestedResumeId !== selectedResumeId) {
+      setSelectedResumeId(requestedResumeId);
+    }
+  }, [requestedResumeId, resumes, selectedResumeId]);
+
+  const loadSavedAnalysis = async (resumeId) => {
+    if (!resumeId) return;
+    setIsLoadingSavedAnalysis(true);
+    try {
+      const { data } = await api.get(`/ai/resume-analysis/${resumeId}`);
+      setAnalysis(data);
+      setMessage("Showing saved analysis.");
+    } catch (error) {
+      if (error?.response?.status === 404) {
+        setAnalysis(null);
+        setMessage("No saved analysis yet for this CV. Click Analyze now to create one.");
+      } else {
+        setMessage(getErrorMessage(error, "Unable to load the saved analysis."));
+      }
+    } finally {
+      setIsLoadingSavedAnalysis(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedResumeId) {
+      setAnalysis(null);
+      return;
+    }
+    const nextParams = new URLSearchParams(searchParams);
+    if (nextParams.get("resumeId") !== selectedResumeId) {
+      nextParams.set("resumeId", selectedResumeId);
+      setSearchParams(nextParams, { replace: true });
+    }
+    void loadSavedAnalysis(selectedResumeId);
+  }, [selectedResumeId]);
+
+  const loadAnalysis = async () => {
+    if (!selectedResumeId) return;
+    setIsAnalyzing(true);
+    try {
+      const { data } = await api.post("/ai/analyze-resume", null, { params: { resume_id: selectedResumeId } });
+      setAnalysis(data);
+      setMessage("Analysis loaded.");
+    } catch (error) {
+      setMessage(getErrorMessage(error, "Unable to load analysis."));
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  return (
+    <div className="page-grid">
+      <PageHero
+        eyebrow="AI insights"
+        title="Understand how your CV reads to the system."
+        description="Review your summary, extracted skills, strengths, gaps, and practical improvements before you apply."
+      />
+      <Panel
+        title="Choose a resume"
+        action={
+          <button className="primary-button" disabled={!selectedResumeId || isAnalyzing} onClick={loadAnalysis} type="button">
+            {isAnalyzing ? "Analyzing..." : analysis ? "Analyze again" : "Analyze now"}
+          </button>
+        }
+      >
+        <label>
+          Resume version
+          <select value={selectedResumeId} onChange={(event) => setSelectedResumeId(event.target.value)}>
+            <option value="">Select one</option>
+            {resumes.map((resume) => (
+              <option key={resume.id} value={resume.id}>
+                {resume.original_filename} (v{resume.version})
+              </option>
+            ))}
+          </select>
+        </label>
+        {message ? <p className="info-text">{message}</p> : null}
+        {isLoadingSavedAnalysis ? <p className="info-text">Loading saved analysis...</p> : null}
+      </Panel>
+      {analysis ? (
+        <div className="content-grid">
+          <Panel title="Summary">
+            <p>{analysis.summary}</p>
+          </Panel>
+          <Panel title="Strengths">
+            <ul className="feature-list">{analysis.strengths.map((item) => <li key={item}>{item}</li>)}</ul>
+          </Panel>
+          <Panel title="Weaknesses">
+            <ul className="feature-list">{analysis.weaknesses.map((item) => <li key={item}>{item}</li>)}</ul>
+          </Panel>
+          <Panel title="Improvement suggestions">
+            <ul className="feature-list">
+              {analysis.suggested_improvements.map((item) => <li key={item}>{item}</li>)}
+            </ul>
+          </Panel>
+          <Panel title="Extracted skills">
+            <div className="tag-cloud">
+              {analysis.extracted_skills.map((item) => (
+                <span className="tag" key={item}>
+                  {item}
+                </span>
+              ))}
+            </div>
+          </Panel>
+        </div>
+      ) : null}
+    </div>
+  );
+}
