@@ -43,3 +43,48 @@ export function JobProvider({ children }) {
     setApplications(data);
     return data;
   };
+
+  const saveJob = async (jobId) => {
+    const { data } = await api.post(`/saved-jobs/${jobId}`);
+    await fetchSavedJobs();
+    return data;
+  };
+
+  const applyToJob = async (payload) => {
+    const { data } = await api.post("/applications", payload);
+    await fetchMyApplications();
+    return data;
+  };
+
+  const createJob = async (payload) => {
+    const { data } = await api.post("/jobs", payload);
+    return data;
+  };
+
+  return (
+    <JobContext.Provider
+      value={{
+        jobs,
+        savedJobs,
+        applications,
+        isLoading,
+        fetchJobs,
+        fetchSavedJobs,
+        fetchMyApplications,
+        saveJob,
+        applyToJob,
+        createJob,
+      }}
+    >
+      {children}
+    </JobContext.Provider>
+  );
+}
+
+export function useJobs() {
+  const context = useContext(JobContext);
+  if (!context) {
+    throw new Error("useJobs must be used inside JobProvider");
+  }
+  return context;
+}
