@@ -98,3 +98,118 @@ export function CandidateProfilePage() {
       setMessage(getErrorMessage(error, "Unable to update profile."));
     }
   };
+
+  
+  const uploadAvatar = async (event) => {
+    event.preventDefault();
+    if (!avatarFile) return;
+    setIsUploadingAvatar(true);
+    try {
+      await uploadCandidateAvatar(avatarFile);
+      setAvatarFile(null);
+      setMessage("Profile photo updated.");
+    } catch (error) {
+      setMessage(getErrorMessage(error, "Unable to upload profile photo."));
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
+  return (
+    <div className="page-grid">
+      <PageHero
+        eyebrow="Profile"
+        title="Shape your professional narrative."
+        description="Everything here improves search visibility, AI summaries, and recruiter context."
+      />
+      <Panel title="Profile editor">
+        <div className="media-upload-card">
+          <div className="media-upload-preview">
+            <ProfileAvatar
+              imageUrl={candidateProfile?.avatar_url}
+              name={candidateProfile?.user?.full_name}
+              size="xl"
+              shape="circle"
+            />
+            <div>
+              <h3>Profile photo</h3>
+              <p>Add a clear photo so recruiters can recognize your profile quickly.</p>
+            </div>
+          </div>
+          <form className="media-upload-form" onSubmit={uploadAvatar}>
+            <input
+              accept=".png,.jpg,.jpeg,.webp"
+              onChange={(event) => setAvatarFile(event.target.files?.[0] || null)}
+              type="file"
+            />
+            <button className="ghost-button" disabled={!avatarFile || isUploadingAvatar} type="submit">
+              {isUploadingAvatar ? "Uploading photo..." : "Upload photo"}
+            </button>
+          </form>
+        </div>
+        <form className="form-grid" onSubmit={submit}>
+          <div className="inline-grid">
+            <label>
+              Phone
+              <input
+                pattern="\+?[0-9()\-\s]{7,20}"
+                title="Use a valid phone number such as +383 44 123 456."
+                value={form.phone}
+                onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
+              />
+            </label>
+            <label>
+              Location
+              <input value={form.location} onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))} />
+            </label>
+          </div>
+          <label>
+            Desired title
+            <input
+              value={form.desired_title}
+              onChange={(event) => setForm((current) => ({ ...current, desired_title: event.target.value }))}
+            />
+          </label>
+          <label>
+            Short bio
+            <textarea rows="6" value={form.bio} onChange={(event) => setForm((current) => ({ ...current, bio: event.target.value }))} />
+          </label>
+          <div className="inline-grid">
+            <label>
+              Years of experience
+              <input
+                type="number"
+                value={form.years_of_experience}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, years_of_experience: event.target.value }))
+                }
+              />
+            </label>
+            <label>
+              LinkedIn
+              <input
+                type="url"
+                placeholder="https://linkedin.com/in/your-profile"
+                value={form.linkedin_url}
+                onChange={(event) => setForm((current) => ({ ...current, linkedin_url: event.target.value }))}
+              />
+            </label>
+          </div>
+          <label>
+            GitHub
+            <input
+              type="url"
+              placeholder="https://github.com/your-profile"
+              value={form.github_url}
+              onChange={(event) => setForm((current) => ({ ...current, github_url: event.target.value }))}
+            />
+          </label>
+          {message ? <p className="info-text">{message}</p> : null}
+          <button className="primary-button" type="submit">
+            Save profile
+          </button>
+        </form>
+      </Panel>
+    </div>
+  );
+}
