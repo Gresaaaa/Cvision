@@ -424,3 +424,159 @@ export function CandidateAnalysisPage() {
     </div>
   );
 }
+
+export function RecommendedJobsPage() {
+  const { jobs, fetchJobs } = useJobs();
+  const [scores, setScores] = useState({});
+
+  useEffect(() => {
+    fetchJobs();
+  }, []);
+
+  const previewScore = async (jobId) => {
+    const { data } = await api.post(`/ai/job-match/${jobId}`);
+    setScores((current) => ({ ...current, [jobId]: data }));
+  };
+
+  const rankedJobs = useMemo(() => {
+    return [...jobs].sort((left, right) => (scores[right.id]?.score || 0) - (scores[left.id]?.score || 0));
+  }, [jobs, scores]);
+
+  return (
+    <div className="page-grid">
+      <PageHero
+        eyebrow="Recommended jobs"
+        title="Preview fit before you commit."
+        description="Trigger match scoring per job and compare opportunities by current AI alignment."
+      />
+      <div className="job-list">
+        {rankedJobs.map((job) => (
+          <article className="job-card" key={job.id}>
+            <div className="job-card-top">
+              <div>
+                <h3>{job.title}</h3>
+                <div className="entity-inline">
+                  <ProfileAvatar
+                    imageUrl={job.company?.logo_url}
+                    name={job.company?.name}
+                    size="xs"
+                    shape="rounded"
+                  />
+                  <p>{job.company?.name}</p>
+                </div>
+              </div>
+              <StatusBadge value={job.work_mode} />
+            </div>
+            <p>{job.location}</p>
+            {scores[job.id] ? <p className="score-callout">{scores[job.id].score}</p> : null}
+            <div className="action-row">
+              <button className="ghost-button" onClick={() => previewScore(job.id)} type="button">
+                Score this job
+              </button>
+              <Link className="inline-link" to={`/jobs/${job.id}`}>
+                Open
+              </Link>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function CandidateApplicationsPage() {
+  const { applications, fetchMyApplications } = useJobs();
+
+  useEffect(() => {
+    fetchMyApplications();
+  }, []);
+
+  return (
+    <div className="page-grid">
+      <PageHero
+        eyebrow="Applications"
+        title="Watch every application move."
+        description="Track recruiter decisions, interview progress, and your current match score in one list."
+      />
+      <Panel title="My applications">
+        {applications.length ? (
+          <div className="stack-list">
+            {applications.map((application) => (
+              <article className="stack-item" key={application.id}>
+                <div>
+                  <strong>{application.job?.title}</strong>
+                  <div className="entity-inline">
+                    <ProfileAvatar
+                      imageUrl={application.job?.company?.logo_url}
+                      name={application.job?.company?.name}
+                      size="xs"
+                      shape="rounded"
+                    />
+                    {application.job?.company?.id ? (
+                      <Link className="inline-link" to={`/companies/${application.job.company.id}`}>
+                        {application.job?.company?.name}
+                      </Link>
+                    ) : (
+                      <p>{application.job?.company?.name}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="application-side">
+                  <StatusBadge value={application.status} />
+                  <small>Score: {application.ai_score?.score || "Pending"}</small>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="No applications yet" body="Apply to a job to start tracking recruiter progress." />
+        )}
+      </Panel>
+    </div>
+  );
+}
+
+export function SavedJobsPage() {
+  const { savedJobs, fetchSavedJobs } = useJobs();
+
+  useEffect(() => {
+    fetchSavedJobs();
+  }, []);
+
+  return (
+    <div className="page-grid">
+      <PageHero
+        eyebrow="Saved jobs"
+        title="Keep a shortlist while you decide."
+        description="Saved jobs are separate from applications so candidates can plan before applying."
+      />
+      <Panel title="Shortlist">
+        {savedJobs.length ? (
+          <div className="stack-list">
+            {savedJobs.map((entry) => (
+              <article className="stack-item" key={entry.id}>
+                <div>
+                  <strong>{entry.job.title}</strong>
+                  <div className="entity-inline">
+                    <ProfileAvatar
+                      imageUrl={entry.job.company?.logo_url}
+                      name={entry.job.company?.name}
+                      size="xs"
+                      shape="rounded"
+                    />
+                    <p>{entry.job.company?.name}</p>
+                  </div>
+                </div>
+                <Link className="inline-link" to={`/jobs/${entry.job.id}`}>
+                  Review
+                </Link>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="Nothing saved yet" body="Use the save action on a job details page to build a shortlist." />
+        )}
+      </Panel>
+    </div>
+  );
+}
