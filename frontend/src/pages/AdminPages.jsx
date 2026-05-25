@@ -184,3 +184,55 @@ export function ManageCompaniesPage() {
     </div>
   );
 }
+export function SystemOverviewPage() {
+  const [overview, setOverview] = useState(null);
+  const [auditLogs, setAuditLogs] = useState([]);
+
+  useEffect(() => {
+    Promise.all([api.get("/admin/system-overview"), api.get("/admin/audit-logs")]).then(
+      ([overviewRes, auditRes]) => {
+        setOverview(overviewRes.data);
+        setAuditLogs(auditRes.data);
+      },
+    );
+  }, []);
+
+  return (
+    <div className="page-grid">
+      <PageHero
+        eyebrow="System overview"
+        title="Operational stats and recent audit activity."
+        description="This is where the backend monitoring requirement becomes visible in the UI."
+      />
+      {overview ? (
+        <MetricStrip
+          items={[
+            { label: "Total jobs", value: overview.total_jobs },
+            { label: "Active jobs", value: overview.active_jobs },
+            { label: "Skills", value: overview.total_skills },
+            { label: "Unread alerts", value: overview.unread_notifications },
+          ]}
+        />
+      ) : null}
+      <Panel title="Recent audit activity">
+        {auditLogs.length ? (
+          <div className="stack-list">
+            {auditLogs.map((log) => (
+              <article className="stack-item" key={log.id}>
+                <div>
+                  <strong>{log.action}</strong>
+                  <p>
+                    {log.entity_type} #{log.entity_id}
+                  </p>
+                </div>
+                <small>{new Date(log.created_at).toLocaleString()}</small>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="No audit events yet" body="Activity logs appear once the system starts receiving actions." />
+        )}
+      </Panel>
+    </div>
+  );
+}
