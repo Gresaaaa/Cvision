@@ -984,3 +984,78 @@ export function JobApplicationsPage() {
     </div>
   );
 }
+export function CandidateRankingPage() {
+  const { user } = useAuth();
+  const { fetchJobs } = useJobs();
+  const [jobs, setJobs] = useState([]);
+  const [selectedJobId, setSelectedJobId] = useState("");
+  const [rankedCandidates, setRankedCandidates] = useState([]);
+
+  useEffect(() => {
+    fetchJobs().then((data) => {
+      const ownJobs = data.filter((job) => job.company?.id === user?.company?.id);
+      setJobs(ownJobs);
+      if (ownJobs[0]) {
+        setSelectedJobId(String(ownJobs[0].id));
+      }
+    });
+  }, [user?.company?.id]);
+
+  useEffect(() => {
+    if (!selectedJobId) return;
+    api.get(`/jobs/${selectedJobId}/applications`).then(({ data }) => {
+      setRankedCandidates(
+        [...data].sort((left, right) => (right.ai_score?.score || 0) - (left.ai_score?.score || 0)),
+      );
+    });
+  }, [selectedJobId]);
+
+  return (
+    <div className="page-grid">
+      <PageHero
+        eyebrow="Candidate ranking"
+        title="Focus on the strongest overlap first."
+        description="AI scores are generated in the background and used here for recruiter triage."
+      />
+      <Panel title="Job selector">
+        <label>
+          Job
+          <select value={selectedJobId} onChange={(event) => setSelectedJobId(event.target.value)}>
+            {jobs.map((job) => (
+              <option key={job.id} value={job.id}>
+                {job.title}
+              </option>
+            ))}
+          </select>
+        </label>
+      </Panel>
+      <Panel title="Ranked applicants">
+        {rankedCandidates.length ? (
+          <div className="stack-list">
+            {rankedCandidates.map((application, index) => (
+              <article className="stack-item" key={application.id}>
+                <div>
+                  <div className="entity-inline">
+                    <ProfileAvatar
+                      imageUrl={application.candidate?.avatar_url}
+                      name={application.candidate?.user?.full_name}
+                      size="xs"
+                      shape="circle"
+                    />
+                    <strong>
+                      #{index + 1} {application.candidate?.user?.full_name}
+                    </strong>
+                  </div>
+                  <p>{application.candidate?.user?.email}</p>
+                </div>
+                <p className="score-callout">{application.ai_score?.score || 0}</p>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="No ranked applicants yet" body="Scores appear after candidates apply and background processing completes." />
+        )}
+      </Panel>
+    </div>
+  );
+}
