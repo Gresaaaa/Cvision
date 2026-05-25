@@ -520,3 +520,467 @@ export function ManageJobsPage() {
     </div>
   );
 }
+export function JobApplicationsPage() {
+  const { user } = useAuth();
+  const { fetchJobs } = useJobs();
+  const [jobs, setJobs] = useState([]);
+  const [selectedJobId, setSelectedJobId] = useState("");
+  const [applications, setApplications] = useState([]);
+  const [selectedProfile, setSelectedProfile] = useState(null);
+  const [selectedApplication, setSelectedApplication] = useState(null);
+  const [selectedCandidateName, setSelectedCandidateName] = useState("");
+  const [message, setMessage] = useState("");
+  const [inviteTargetId, setInviteTargetId] = useState(null);
+  const [inviteForm, setInviteForm] = useState({
+    scheduled_at: "",
+    mode: "video",
+    location: "",
+    meeting_link: "",
+    notes: "",
+    contact_email: "",
+    contact_phone: "",
+  });
+
+  const selectedJob = useMemo(
+    () => jobs.find((job) => String(job.id) === selectedJobId) || null,
+    [jobs, selectedJobId],
+  );
+  const selectedCandidateSkills = useMemo(
+    () =>
+      (selectedProfile?.skills || [])
+        .map((skillLink) => skillLink.skill?.name)
+        .filter(Boolean),
+    [selectedProfile],
+  );
+  const selectedRequiredSkills = useMemo(
+    () =>
+      (selectedJob?.requirements || [])
+        .map((requirement) => requirement.skill?.name)
+        .filter(Boolean),
+    [selectedJob],
+  );
+  const candidateSkillSet = useMemo(
+    () => new Set(selectedCandidateSkills.map((skill) => skill.toLowerCase())),
+    [selectedCandidateSkills],
+  );
+  const matchedRequiredSkills = useMemo(
+    () => selectedRequiredSkills.filter((skill) => candidateSkillSet.has(skill.toLowerCase())),
+    [candidateSkillSet, selectedRequiredSkills],
+  );
+  const missingRequiredSkills = useMemo(
+    () => selectedRequiredSkills.filter((skill) => !candidateSkillSet.has(skill.toLowerCase())),
+    [candidateSkillSet, selectedRequiredSkills],
+  );
+  const extraCandidateSkills = useMemo(
+    () =>
+      selectedCandidateSkills.filter(
+        (skill) => !selectedRequiredSkills.some((requiredSkill) => requiredSkill.toLowerCase() === skill.toLowerCase()),
+      ),
+    [selectedCandidateSkills, selectedRequiredSkills],
+  );
+
+  const loadApplications = async (jobId) => {
+    const { data } = await api.get(`/jobs/${jobId}/applications`);
+    setApplications(data);
+  };
+
+  useEffect(() => {
+    fetchJobs().then((data) => {
+      const ownJobs = data.filter((job) => job.company?.id === user?.company?.id);
+      setJobs(ownJobs);
+      if (ownJobs[0]) {
+        setSelectedJobId(String(ownJobs[0].id));
+      }
+    });
+  }, [user?.company?.id]);
+
+  useEffect(() => {
+    if (selectedJobId) {
+      setSelectedProfile(null);
+      setSelectedApplication(null);
+      loadApplications(selectedJobId);
+    }
+  }, [selectedJobId]);
+
+  const openCandidateProfile = async (application) => {
+    try {
+      const { data } = await api.get(`/candidates/${application.candidate_id}`);
+      setSelectedProfile(data);
+      setSelectedApplication(application);
+      setSelectedCandidateName(application.candidate?.user?.full_name || "Candidate");
+      setMessage("");
+    } catch (error) {
+      setMessage(getErrorMessage(error, "Unable to load this candidate profile."));
+    }
+  };
+
+  const startInvite = (application) => {
+    setInviteTargetId((current) => (current === application.id ? null : application.id));
+    setInviteForm({
+      scheduled_at: "",
+      mode: "video",
+      location: "",
+      meeting_link: "",
+      notes: `Interview invite for ${application.candidate?.user?.full_name || "candidate"}.`,
+      contact_email: "",
+      contact_phone: "",
+    });
+  };
+
+  const submitInvite = async (event, applicationId) => {
+    event.preventDefault();
+    try {
+      await api.post(`/applications/${applicationId}/invite-interview`, {
+        scheduled_at: inviteForm.scheduled_at || null,
+        mode: inviteForm.mode || null,
+        location: inviteForm.location || null,
+        meeting_link: inviteForm.meeting_link || null,
+        notes: inviteForm.notes || null,
+        contact_email: inviteForm.contact_email || null,
+        contact_phone: inviteForm.contact_phone || null,
+      });
+      await loadApplications(selectedJobId);
+      setInviteTargetId(null);
+      setMessage("Interview invitation sent. The candidate will see it in notifications.");
+    } catch (error) {
+      setMessage(getErrorMessage(error, "Unable to send this interview invitation."));
+    }
+  };
+
+  return (
+    <div className="page-grid">
+      <PageHero
+        eyebrow="Manage candidates"
+        title="Review applicants, open full profiles, and invite strong matches to interview."
+        description="See who applied, read their cover letters, and send interview invites with all the details candidates need."
+      />
+      <Panel title="Select a job">
+        <label>
+          Job
+          <select value={selectedJobId} onChange={(event) => setSelectedJobId(event.target.value)}>
+            {jobs.map((job) => (
+              <option key={job.id} value={job.id}>
+                {job.title}
+              </option>
+            ))}
+          </select>
+        </label>
+      </Panel>
+      {message ? <p className="info-text">{message}</p> : null}
+      <Panel title="Applicants">
+        {applications.length ? (
+          <div className="stack-list">
+            {applications.map((application) => (
+              <article className="stack-item" key={application.id}>
+                <div>
+                  <div className="entity-inline">
+                    <ProfileAvatar
+                      imageUrl={application.candidate?.avatar_url}
+                      name={application.candidate?.user?.full_name}
+                      size="xs"
+                      shape="circle"
+                    />
+                    <strong>{application.candidate?.user?.full_name}</strong>
+                  </div>
+                  <p>{application.candidate?.user?.email}</p>
+                  <small>{application.cover_letter ? "Cover letter attached" : "No cover letter attached"}</small>
+                  {application.interviews?.[0] ? (
+                    <small>
+                      Interview invited{application.interviews[0].scheduled_at
+                        ? ` for ${new Date(application.interviews[0].scheduled_at).toLocaleString()}`
+                        : ""}
+                    </small>
+                  ) : null}
+                </div>
+                <div className="application-side">
+                  <StatusBadge value={application.status} />
+                  <small>Score: {application.ai_score?.score || "Pending"}</small>
+                  <div className="action-row application-actions">
+                    <button className="ghost-button" onClick={() => openCandidateProfile(application)} type="button">
+                      View profile
+                    </button>
+                    <button className="primary-button" onClick={() => startInvite(application)} type="button">
+                      Invite to interview
+                    </button>
+                  </div>
+                </div>
+                {inviteTargetId === application.id ? (
+                  <form className="form-grid interview-form" onSubmit={(event) => submitInvite(event, application.id)}>
+                    <div className="inline-grid">
+                      <label>
+                        Schedule
+                        <input
+                          type="datetime-local"
+                          value={inviteForm.scheduled_at}
+                          onChange={(event) =>
+                            setInviteForm((current) => ({ ...current, scheduled_at: event.target.value }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        Mode
+                        <select
+                          value={inviteForm.mode}
+                          onChange={(event) => setInviteForm((current) => ({ ...current, mode: event.target.value }))}
+                        >
+                          <option value="video">Video</option>
+                          <option value="onsite">Onsite</option>
+                          <option value="phone">Phone</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div className="inline-grid">
+                      <label>
+                        Location
+                        <input
+                          value={inviteForm.location}
+                          onChange={(event) =>
+                            setInviteForm((current) => ({ ...current, location: event.target.value }))
+                          }
+                          placeholder="Office address or room"
+                        />
+                      </label>
+                      <label>
+                        Meeting link
+                        <input
+                          type="url"
+                          value={inviteForm.meeting_link}
+                          onChange={(event) =>
+                            setInviteForm((current) => ({ ...current, meeting_link: event.target.value }))
+                          }
+                          placeholder="https://meet.example.com/interview"
+                        />
+                      </label>
+                    </div>
+                    <div className="inline-grid">
+                      <label>
+                        Contact email
+                        <input
+                          type="email"
+                          value={inviteForm.contact_email}
+                          onChange={(event) =>
+                            setInviteForm((current) => ({ ...current, contact_email: event.target.value }))
+                          }
+                          placeholder="recruiter@company.com"
+                          required={!inviteForm.contact_phone}
+                        />
+                      </label>
+                      <label>
+                        Contact phone
+                        <input
+                          pattern="\+?[0-9()\-\s]{7,20}"
+                          title="Use a valid phone number such as +383 44 123 456."
+                          value={inviteForm.contact_phone}
+                          onChange={(event) =>
+                            setInviteForm((current) => ({ ...current, contact_phone: event.target.value }))
+                          }
+                          placeholder="+383 44 123 456"
+                          required={!inviteForm.contact_email}
+                        />
+                      </label>
+                    </div>
+                    <label>
+                      Notes
+                      <textarea
+                        rows="3"
+                        value={inviteForm.notes}
+                        onChange={(event) => setInviteForm((current) => ({ ...current, notes: event.target.value }))}
+                        placeholder="Share interview context or next-step details."
+                      />
+                    </label>
+                    <div className="action-row">
+                      <button className="primary-button" type="submit">
+                        Send invite
+                      </button>
+                      <button className="ghost-button" onClick={() => setInviteTargetId(null)} type="button">
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="No applicants yet" body="When candidates apply, they will show up here with their current score." />
+        )}
+      </Panel>
+      <Panel
+        title={selectedProfile ? `${selectedCandidateName} profile` : "Candidate profile"}
+        subtitle={
+          selectedJob
+            ? `Profiles are shown only for candidates who applied to ${selectedJob.title}.`
+            : "Select a job and open a candidate to inspect their full profile."
+        }
+      >
+        {selectedProfile ? (
+          <div className="profile-grid">
+            <article className="profile-card">
+              <div className="entity-inline entity-inline-spacious">
+                <ProfileAvatar
+                  imageUrl={selectedProfile.avatar_url}
+                  name={selectedProfile.user?.full_name}
+                  size="lg"
+                  shape="circle"
+                />
+                <div>
+                  <h3>Overview</h3>
+                  <strong>{selectedProfile.user?.full_name}</strong>
+                </div>
+              </div>
+              <p>{selectedProfile.bio || "No candidate bio provided yet."}</p>
+              <div className="profile-list">
+                <span>Experience: {selectedProfile.years_of_experience} years</span>
+                <span>Location: {selectedProfile.location || "-"}</span>
+                <span>Desired title: {selectedProfile.desired_title || "-"}</span>
+                <span>Phone: {selectedProfile.phone || "-"}</span>
+                <span>LinkedIn: {selectedProfile.linkedin_url || "-"}</span>
+                <span>GitHub: {selectedProfile.github_url || "-"}</span>
+              </div>
+            </article>
+            <article className="profile-card">
+              <h3>Skills</h3>
+              {selectedCandidateSkills.length ? (
+                <div className="profile-list">
+                  {matchedRequiredSkills.length ? (
+                    <>
+                      <strong>Matched requirements</strong>
+                      <div className="tag-cloud">
+                        {matchedRequiredSkills.map((skill) => (
+                          <span className="tag tag-match" key={`matched-${skill}`}>
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  ) : null}
+                  {missingRequiredSkills.length ? (
+                    <>
+                      <strong>Missing requirements</strong>
+                      <div className="tag-cloud">
+                        {missingRequiredSkills.map((skill) => (
+                          <span className="tag tag-missing" key={`missing-${skill}`}>
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  ) : matchedRequiredSkills.length ? (
+                    <p className="info-text">This candidate currently covers all listed job requirements.</p>
+                  ) : null}
+                  <strong>Extra skills</strong>
+                  <div className="tag-cloud">
+                    {(extraCandidateSkills.length ? extraCandidateSkills : selectedCandidateSkills).map((skill) => (
+                      <span className="tag" key={skill}>
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p>No structured skills saved yet.</p>
+              )}
+            </article>
+            <article className="profile-card">
+              <h3>Experience</h3>
+              {selectedProfile.experiences?.length ? (
+                <div className="stack-list compact-stack">
+                  {selectedProfile.experiences.map((experience) => (
+                    <div className="stack-item" key={experience.id}>
+                      <div>
+                        <strong>{experience.title}</strong>
+                        <p>{experience.company_name}</p>
+                        <small>
+                          {experience.start_date || "Start not set"} - {experience.end_date || "Present"}
+                        </small>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p>No work experience added yet.</p>
+              )}
+            </article>
+            <article className="profile-card">
+              <h3>Education</h3>
+              {selectedProfile.educations?.length ? (
+                <div className="stack-list compact-stack">
+                  {selectedProfile.educations.map((education) => (
+                    <div className="stack-item" key={education.id}>
+                      <div>
+                        <strong>{education.degree}</strong>
+                        <p>{education.institution}</p>
+                        <small>
+                          {education.start_year || "Start not set"} - {education.end_year || "Present"}
+                        </small>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p>No education history added yet.</p>
+              )}
+            </article>
+            <article className="profile-card">
+              <h3>Certificates and languages</h3>
+              <div className="profile-list">
+                <strong>Certifications</strong>
+                {selectedProfile.certifications?.length ? (
+                  selectedProfile.certifications.map((certificate) => (
+                    <span key={certificate.id}>
+                      {certificate.name}
+                      {certificate.issuer ? ` - ${certificate.issuer}` : ""}
+                    </span>
+                  ))
+                ) : (
+                  <span>No certifications added.</span>
+                )}
+                <strong>Languages</strong>
+                {selectedProfile.languages?.length ? (
+                  selectedProfile.languages.map((language) => (
+                    <span key={language.id}>
+                      {language.name}
+                      {language.proficiency ? ` - ${language.proficiency}` : ""}
+                    </span>
+                  ))
+                ) : (
+                  <span>No languages added.</span>
+                )}
+              </div>
+            </article>
+            <article className="profile-card">
+              <h3>Resumes</h3>
+              {selectedProfile.resumes?.length ? (
+                <div className="stack-list compact-stack">
+                  {selectedProfile.resumes.map((resume) => (
+                    <div className="stack-item" key={resume.id}>
+                      <div>
+                        <strong>{resume.original_filename}</strong>
+                        <p>Version {resume.version}</p>
+                        <small>{new Date(resume.uploaded_at).toLocaleString()}</small>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p>No resumes uploaded yet.</p>
+              )}
+            </article>
+            <article className="profile-card">
+              <h3>Cover letter</h3>
+              <p>
+                {selectedApplication?.cover_letter ||
+                  "This application was submitted without a cover letter."}
+              </p>
+            </article>
+          </div>
+        ) : (
+          <EmptyState
+            title="Open an applicant profile"
+            body="Use the View profile button to inspect the candidate's full experience, skills, and resume history."
+          />
+        )}
+      </Panel>
+    </div>
+  );
+}
