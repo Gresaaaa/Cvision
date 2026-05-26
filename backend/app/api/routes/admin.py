@@ -214,3 +214,52 @@ def create_skill(
     cache_service.delete("taxonomy:skills")
     cache_service.delete("public:skills")
     return skill
+@router.get("/categories", response_model=list[JobCategoryPublic])
+def list_categories(_: User = Depends(require_roles("admin")), db: Session = Depends(get_db)):
+    cached = cache_service.get_json("taxonomy:categories")
+    if cached:
+        return cached
+    categories = db.query(JobCategory).order_by(JobCategory.name.asc()).all()
+    cache_service.set_json("taxonomy:categories", jsonable_encoder(categories), ttl_seconds=1800)
+    return categories
+
+
+@router.post("/categories", response_model=JobCategoryPublic)
+def create_category(
+    payload: JobCategoryCreate,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    category = JobCategory(name=payload.name, description=payload.description)
+    db.add(category)
+    db.flush()
+    audit_service.log(
+        db,
+        user_id=current_user.id,
+        action="taxonomy.category.create",
+        entity_type="job_category",
+        entity_id=str(category.id),
+    )
+    db.commit()
+    cache_service.delete("taxonomy:categories")
+    cache_service.delete("public:categories")
+    return category
+
+
+@router.get("/system-overview", response_model=SystemOverview)
+def system_overview(_: User = Depends(require_roles("admin")), db: Session = Depends(get_db)):
+    return SystemOverview(
+        total_users=db.query(func.count(User.id)).scalar() or 0,
+        total_companies=db.query(func.count(Company.id)).scalar() or 0,
+        total_candidates=db.query(func.count(CandidateProfile.id)).scalar() or 0,
+        total_jobs=db.query(func.count(JobPost.id)).scalar() or 0,
+        total_applications=db.query(func.count(Application.id)).scalar() or 0,
+        total_skills=db.query(func.count(Skill.id)).scalar() or 0,
+        active_jobs=db.query(func.count(JobPost.id)).filter(JobPost.is_active.is_(True)).scalar() or 0,
+        unread_notifications=db.query(func.count(Notification.id)).filter(Notification.is_read.is_(False)).scalar() or 0,
+    )
+
+
+@router.get("/audit-logs")
+def audit_logs(_: User = Depends(require_roles("admin")), db: Session = Depends(get_db)):
+    return db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(100).all()
