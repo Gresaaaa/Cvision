@@ -101,3 +101,105 @@ def invite_to_interview(
         raise HTTPException(status_code=404, detail="Application not found")
     if current_user.role.name == "company" and application.job.company_id != current_user.company_id:
         raise HTTPException(status_code=403, detail="Cannot invite another company's candidate")
+
+    interview = Interview(
+        application_id=application.id,
+        scheduled_at=payload.scheduled_at,
+        mode=payload.mode,
+        location=payload.location,
+        meeting_link=payload.meeting_link,
+        notes=payload.notes,
+        contact_email=payload.contact_email,
+        contact_phone=payload.contact_phone,
+    )
+    application.status = ApplicationStatus.INTERVIEW
+    db.add(interview)
+    db.flush()
+    db.add(
+        ApplicationStatusHistory(
+            application_id=application.id,
+            status=ApplicationStatus.INTERVIEW,
+            changed_by_id=current_user.id,
+            notes=payload.notes or "Interview invitation sent",
+        )
+    )
+    audit_service.log(
+        db,
+        user_id=current_user.id,
+        action="application.interview.invite",
+        entity_type="interview",
+        entity_id=str(interview.id),
+        company_id=application.job.company_id,
+        details={
+            "application_id": application.id,
+            "job_id": application.job_id,
+            "candidate_id": application.candidate_id,
+        },
+    )
+    db.commit()
+    background_tasks.add_task(notify_application_status, application.id, ApplicationStatus.INTERVIEW.value)
+    return interview
+
+
+@router.get("/my", response_model=list[ApplicationPublic])
+def my_applications(
+    current_user: User = Depends(require_roles("candidate")),
+    db: Session = Depends(get_db),
+):
+    profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == current_user.id).first()
+    if not profile:
+        return []
+    return (
+        db.query(Application)
+        .options(joinedload(Application.job).joinedload(JobPost.company), joinedload(Application.ai_score))
+        .filter(Application.candidate_id == profile.id)
+        .order_by(Application.applied_at.desc())
+        .all()
+    )
+
+
+@router.patch("/{application_id}/status", response_model=ApplicationPublic)
+def update_application_status(
+    application_id: int,
+    payload: ApplicationStatusUpdate,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(require_roles("company", "admin")),
+    db: Session = Depends(get_db),
+):
+    application = (
+        db.query(Application)
+        .options(joinedload(Application.job), joinedload(Application.candidate).joinedload(CandidateProfile.user))
+        .filter(Application.id == application_id)
+        .first()
+    )
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    if current_user.role.name == "company" and application.job.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Cannot update another company's application")
+
+    application.status = payload.status
+    db.add(
+        ApplicationStatusHistory(
+            application_id=application.id,
+            status=payload.status,
+            changed_by_id=current_user.id,
+            notes=payload.notes,
+        )
+    )
+    audit_service.log(
+        db,
+        user_id=current_user.id,
+        action="application.status.update",
+        entity_type="application",
+        entity_id=str(application.id),
+        company_id=application.job.company_id,
+        details={"status": payload.status},
+    )
+    db.commit()
+    background_tasks.add_task(notify_application_status, application.id, payload.status.value)
+    return (
+        db.query(Application)
+        .options(joinedload(Application.job).joinedload(JobPost.company), joinedload(Application.ai_score))
+        .filter(Application.id == application.id)
+        .first()
+    )
