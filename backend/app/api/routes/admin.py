@@ -121,3 +121,96 @@ def reactivate_user(
     )
     db.commit()
     return AdminActionResponse(message=f"{user.email} was reactivated.")
+@router.delete("/companies/{company_id}", response_model=AdminActionResponse)
+def delete_company(
+    company_id: int,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    company = (
+        db.query(Company)
+        .options(joinedload(Company.users).joinedload(User.role), joinedload(Company.jobs))
+        .filter(Company.id == company_id)
+        .first()
+    )
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    if current_user.company_id == company.id:
+        raise HTTPException(status_code=400, detail="You cannot delete the company linked to your current account")
+
+    company_name = company.name
+    linked_users = list(company.users)
+    linked_jobs = list(company.jobs)
+    deleted_user_count = len(linked_users)
+    deleted_job_count = len(linked_jobs)
+
+    db.query(AuditLog).filter(AuditLog.company_id == company.id).update(
+        {AuditLog.company_id: None},
+        synchronize_session=False,
+    )
+    db.query(Message).filter(Message.company_id == company.id).update(
+        {Message.company_id: None},
+        synchronize_session=False,
+    )
+
+    company.owner_user_id = None
+    for user in linked_users:
+        if user.id == current_user.id:
+            raise HTTPException(status_code=400, detail="You cannot delete your own admin account")
+        user.company_id = None
+    db.flush()
+
+    for job in linked_jobs:
+        db.delete(job)
+
+    for user in linked_users:
+        _delete_user_record(db, user)
+
+    db.delete(company)
+    audit_service.log(
+        db,
+        user_id=current_user.id,
+        action="admin.company.delete",
+        entity_type="company",
+        entity_id=str(company_id),
+        details={
+            "name": company_name,
+            "deleted_users": deleted_user_count,
+            "deleted_jobs": deleted_job_count,
+        },
+    )
+    db.commit()
+    cache_service.flush_prefix("jobs:")
+    return AdminActionResponse(message=f"{company_name} and its linked records were deleted.")
+
+
+@router.get("/skills", response_model=list[SkillPublic])
+def list_skills(_: User = Depends(require_roles("admin")), db: Session = Depends(get_db)):
+    cached = cache_service.get_json("taxonomy:skills")
+    if cached:
+        return cached
+    skills = db.query(Skill).order_by(Skill.name.asc()).all()
+    cache_service.set_json("taxonomy:skills", jsonable_encoder(skills), ttl_seconds=1800)
+    return skills
+
+
+@router.post("/skills", response_model=SkillPublic)
+def create_skill(
+    payload: SkillCreate,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    skill = Skill(name=payload.name, category=payload.category)
+    db.add(skill)
+    db.flush()
+    audit_service.log(
+        db,
+        user_id=current_user.id,
+        action="taxonomy.skill.create",
+        entity_type="skill",
+        entity_id=str(skill.id),
+    )
+    db.commit()
+    cache_service.delete("taxonomy:skills")
+    cache_service.delete("public:skills")
+    return skill
