@@ -16,3 +16,17 @@ from app.models import (
     Skill,
     User,
 )
+from app.schemas import (
+    AdminActionResponse,
+    CompanyPublic,
+    JobCategoryCreate,
+    JobCategoryPublic,
+    SkillCreate,
+    SkillPublic,
+    SystemOverview,
+    UserPublic,
+)
+from app.services.audit_service import audit_service
+from app.services.cache_service import cache_service
+
+router = APIRouter(prefix="/admin", tags=["Admin"])
