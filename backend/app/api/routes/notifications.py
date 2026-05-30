@@ -19,6 +19,8 @@ def get_notifications(
         .order_by(Notification.created_at.desc())
         .all()
     )
+
+
 @router.patch("/{notification_id}/read", response_model=NotificationPublic)
 def mark_notification_as_read(
     notification_id: int,

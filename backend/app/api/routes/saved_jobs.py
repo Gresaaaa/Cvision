@@ -46,3 +46,19 @@ def save_job(
         .filter(SavedJob.id == saved.id)
         .first()
     )
+
+
+@router.get("", response_model=list[SavedJobPublic])
+def get_saved_jobs(
+    current_user: User = Depends(require_roles("candidate")),
+    db: Session = Depends(get_db),
+):
+    profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == current_user.id).first()
+    if not profile:
+        return []
+    return (
+        db.query(SavedJob)
+        .options(joinedload(SavedJob.job).joinedload(JobPost.company))
+        .filter(SavedJob.candidate_id == profile.id)
+        .all()
+    )

@@ -30,6 +30,8 @@ from app.services.audit_service import audit_service
 from app.services.cache_service import cache_service
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
+
+
 @router.get("/users", response_model=list[UserPublic])
 def list_users(_: User = Depends(require_roles("admin")), db: Session = Depends(get_db)):
     return (
@@ -121,6 +123,42 @@ def reactivate_user(
     )
     db.commit()
     return AdminActionResponse(message=f"{user.email} was reactivated.")
+
+
+@router.delete("/users/{user_id}", response_model=AdminActionResponse)
+def delete_user(
+    user_id: int,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    user = (
+        db.query(User)
+        .options(joinedload(User.role), joinedload(User.company), joinedload(User.owned_company))
+        .filter(User.id == user_id)
+        .first()
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot delete your own admin account")
+
+    email = user.email
+    role_name = user.role.name if user.role else "unknown"
+    company_id = user.company_id
+    _delete_user_record(db, user)
+    audit_service.log(
+        db,
+        user_id=current_user.id,
+        action="admin.user.delete",
+        entity_type="user",
+        entity_id=str(user_id),
+        company_id=company_id,
+        details={"email": email, "role": role_name},
+    )
+    db.commit()
+    return AdminActionResponse(message=f"{email} was deleted.")
+
+
 @router.delete("/companies/{company_id}", response_model=AdminActionResponse)
 def delete_company(
     company_id: int,
@@ -214,6 +252,8 @@ def create_skill(
     cache_service.delete("taxonomy:skills")
     cache_service.delete("public:skills")
     return skill
+
+
 @router.get("/categories", response_model=list[JobCategoryPublic])
 def list_categories(_: User = Depends(require_roles("admin")), db: Session = Depends(get_db)):
     cached = cache_service.get_json("taxonomy:categories")

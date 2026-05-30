@@ -1,0 +1,8 @@
+.venv/
+.deps/
+__pycache__/
+.pytest_cache/
+pytest-cache-files-*
+test_cvision.db
+*.pyc
+uploads/
