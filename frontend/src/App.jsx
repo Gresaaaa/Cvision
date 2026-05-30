@@ -1,122 +1,214 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 
-function App() {
-  const [count, setCount] = useState(0)
+import Layout from "./components/Layout";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { AuthProvider } from "./contexts/AuthContext";
+import { JobProvider } from "./contexts/JobContext";
+import { NotificationProvider } from "./contexts/NotificationContext";
+import { UserProvider } from "./contexts/UserContext";
+import {
+  AdminDashboardPage,
+  ManageCompaniesPage,
+  ManageUsersPage,
+  SystemOverviewPage,
+} from "./pages/AdminPages";
+import {
+  CandidateAnalysisPage,
+  CandidateApplicationsPage,
+  CandidateDashboardPage,
+  CandidateProfilePage,
+  CandidateResumePage,
+  RecommendedJobsPage,
+  SavedJobsPage,
+} from "./pages/CandidatePages";
+import {
+  CandidateRankingPage,
+  CompanyDashboardPage,
+  CompanyProfilePage,
+  CreateJobPage,
+  JobApplicationsPage,
+  ManageJobsPage,
+} from "./pages/CompanyPages";
+import {
+  CompanyDetailsPage,
+  HomePage,
+  JobDetailsPage,
+  JobsPage,
+  LoginPage,
+  NotFoundPage,
+  NotificationsPage,
+  RegisterPage,
+} from "./pages/PublicPages";
 
+export default function App() {
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <BrowserRouter>
+      <AuthProvider>
+        <NotificationProvider>
+          <UserProvider>
+            <JobProvider>
+              <Routes>
+                <Route element={<Layout />}>
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/register" element={<RegisterPage />} />
+                  <Route path="/jobs" element={<JobsPage />} />
+                  <Route path="/jobs/:id" element={<JobDetailsPage />} />
+                  <Route path="/companies/:companyId" element={<CompanyDetailsPage />} />
+                  <Route
+                    path="/notifications"
+                    element={
+                      <ProtectedRoute roles={["candidate", "company", "admin"]}>
+                        <NotificationsPage />
+                      </ProtectedRoute>
+                    }
+                  />
 
-      <div className="ticks"></div>
+                  <Route
+                    path="/candidate/dashboard"
+                    element={
+                      <ProtectedRoute roles={["candidate"]}>
+                        <CandidateDashboardPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/candidate/profile"
+                    element={
+                      <ProtectedRoute roles={["candidate"]}>
+                        <CandidateProfilePage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/candidate/resume"
+                    element={
+                      <ProtectedRoute roles={["candidate"]}>
+                        <CandidateResumePage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/candidate/analysis"
+                    element={
+                      <ProtectedRoute roles={["candidate"]}>
+                        <CandidateAnalysisPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/candidate/recommended-jobs"
+                    element={
+                      <ProtectedRoute roles={["candidate"]}>
+                        <RecommendedJobsPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/candidate/applications"
+                    element={
+                      <ProtectedRoute roles={["candidate"]}>
+                        <CandidateApplicationsPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/candidate/saved-jobs"
+                    element={
+                      <ProtectedRoute roles={["candidate"]}>
+                        <SavedJobsPage />
+                      </ProtectedRoute>
+                    }
+                  />
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+                  <Route
+                    path="/company/dashboard"
+                    element={
+                      <ProtectedRoute roles={["company"]}>
+                        <CompanyDashboardPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/company/profile"
+                    element={
+                      <ProtectedRoute roles={["company"]}>
+                        <CompanyProfilePage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/company/create-job"
+                    element={
+                      <ProtectedRoute roles={["company"]}>
+                        <CreateJobPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/company/manage-jobs"
+                    element={
+                      <ProtectedRoute roles={["company"]}>
+                        <ManageJobsPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/company/applications"
+                    element={
+                      <ProtectedRoute roles={["company"]}>
+                        <JobApplicationsPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/company/ranking"
+                    element={
+                      <ProtectedRoute roles={["company"]}>
+                        <CandidateRankingPage />
+                      </ProtectedRoute>
+                    }
+                  />
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+                  <Route
+                    path="/admin/dashboard"
+                    element={
+                      <ProtectedRoute roles={["admin"]}>
+                        <AdminDashboardPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/users"
+                    element={
+                      <ProtectedRoute roles={["admin"]}>
+                        <ManageUsersPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/companies"
+                    element={
+                      <ProtectedRoute roles={["admin"]}>
+                        <ManageCompaniesPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/system"
+                    element={
+                      <ProtectedRoute roles={["admin"]}>
+                        <SystemOverviewPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route path="*" element={<NotFoundPage />} />
+                </Route>
+              </Routes>
+            </JobProvider>
+          </UserProvider>
+        </NotificationProvider>
+      </AuthProvider>
+    </BrowserRouter>
+  );
 }
-
-export default App
